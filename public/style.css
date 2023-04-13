@@ -1,0 +1,10 @@
+*{
+    background-color: rgb(0, 170, 255);
+}
+.showcase{
+    align-items: center;
+}
+
+.form-group{
+    margin: 100px;
+}
