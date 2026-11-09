@@ -1,17 +1,15 @@
-<header>
-    <div class="container">
-        <a href="" class="logo">Express <span class="green-text">
-            DIARY
-        </span></a>
-
-        <nav>
+<% const current = typeof active !== 'undefined' ? active : ''; %>
+<header class="site-header">
+    <div class="container header-inner">
+        <a href="/" class="logo">Express <span class="green-text">Diary</span></a>
+        <nav aria-label="Main">
             <ul>
-                <li><a href="/">Home</a></li>
-                <li><a href="/about">About</a></li>
-                <li><a href="/Diary">Go to Diary</a></li>
+                <li><a href="/" <%- current === 'home' ? 'aria-current="page"' : '' %>>Home</a></li>
+                <li><a href="/diary" <%- current === 'diary' ? 'aria-current="page"' : '' %>>Entries</a></li>
+                <li><a href="/about" <%- current === 'about' ? 'aria-current="page"' : '' %>>About</a></li>
+                <li><a href="/add" class="btn btn-small" <%- current === 'add' ? 'aria-current="page"' : '' %>>+ New entry</a></li>
             </ul>
         </nav>
-
-
     </div>
 </header>
+<main class="container">

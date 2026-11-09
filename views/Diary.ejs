@@ -1,20 +1,29 @@
-<%- include('./layout/header') %>
+<%- include('./layout/header', { title: 'Entries' }) %>
 <%- include('./layout/navbar') %>
-
-    <div class="add-container">
-        <div class="add">
-            <p>Add to Diary</p>
-            <a href="/add">Add</a>
+    <div class="page-head">
+        <div>
+            <h1>Your entries</h1>
+            <p class="muted"><%= data.length %> <%= data.length === 1 ? 'entry' : 'entries' %>, newest first</p>
         </div>
+        <a class="btn" href="/add">+ New entry</a>
     </div>
 
-<div class="diary">
-    <% data.forEach((diary)=>{%>
-        <div class="diary-container">
-            <h3><%= diary.title %></h3>
-            <p><%= diary.date %></p>
-            <a href="/diary/<%= diary.id %>">More</a>
+    <% if (data.length === 0) { %>
+        <div class="empty">
+            <p class="empty-title">No entries yet</p>
+            <p class="muted">Start with what happened today.</p>
+            <a class="btn" href="/add">Write your first entry</a>
         </div>
-    <%}) %>
-</div>
+    <% } else { %>
+        <div class="diary">
+            <% data.forEach((diary) => { %>
+                <a class="diary-card" href="/diary/<%= diary.id %>">
+                    <time datetime="<%= toInputDate(diary.date) %>"><%= formatDate(diary.date) %></time>
+                    <h2><%= diary.title %></h2>
+                    <p><%= diary.description.length > 140 ? diary.description.slice(0, 140) + '…' : diary.description %></p>
+                    <span class="more">Read entry →</span>
+                </a>
+            <% }) %>
+        </div>
+    <% } %>
 <%- include('./layout/footer') %>

@@ -1,13 +1,15 @@
-<%- include('./layout/header') %>
+<%- include('./layout/header', { title: data.title }) %>
 <%- include('./layout/navbar') %>
-<!-- <%= data %> -->
-<div class="page-container">
-    <h1><%= data.title %></h1>
-    <p><%= data.description %></p>
-    <p class="diary-text"><%= data.date %></p>
-</div>
-
-<div class="settings">
-    <a href="/diary/edit/<%= data.id %>" class="edit">Edit</a>
-</div>
+    <a class="back" href="/diary">← All entries</a>
+    <article class="panel entry">
+        <time datetime="<%= toInputDate(data.date) %>"><%= formatDate(data.date) %></time>
+        <h1><%= data.title %></h1>
+        <div class="entry-body"><%= data.description %></div>
+        <div class="actions settings">
+            <a href="/diary/edit/<%= data.id %>" class="btn">Edit</a>
+            <form action="/diary/<%= data.id %>?_method=DELETE" method="post" onsubmit="return confirm('Delete this entry? This cannot be undone.');">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </div>
+    </article>
 <%- include('./layout/footer') %>

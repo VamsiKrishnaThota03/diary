@@ -1,8 +1,12 @@
-<%- include('./layout/header')   %>
-<%- include('./layout/navbar')  %>
-    <div class="showcase">
+<%- include('./layout/header') %>
+<%- include('./layout/navbar') %>
+    <section class="showcase">
+        <p class="eyebrow">Your private journal</p>
         <h1>Welcome to Express <span class="green-text">Diary</span></h1>
-        <p>Record your Daily life</p>
-        <a href="/Diary">Open your Express Diary</a>
-    </div>
+        <p class="lead">Record your daily life: one entry at a time, dated and easy to look back on.</p>
+        <div class="actions">
+            <a class="btn" href="/diary">Open your diary</a>
+            <a class="btn btn-ghost" href="/add">Write today&rsquo;s entry</a>
+        </div>
+    </section>
 <%- include('./layout/footer') %>

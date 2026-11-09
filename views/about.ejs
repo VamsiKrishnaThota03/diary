@@ -1,10 +1,8 @@
-<%- include('./layout/header') %>
+<%- include('./layout/header', { title: 'About' }) %>
 <%- include('./layout/navbar') %>
-    <div class="showcase">
-        <h1>About<span>
-            Express Diary
-        </span></h1>
-        <p>A simple app made with express</p>
-        <p>Version 1.0</p>
-    </div>
+    <section class="panel prose">
+        <h1>About Express <span class="green-text">Diary</span></h1>
+        <p>A small personal diary built with Node.js, Express, EJS and MongoDB. Add dated entries, read them back, edit them and delete the ones you no longer need.</p>
+        <p class="muted">Version 1.1</p>
+    </section>
 <%- include('./layout/footer') %>
