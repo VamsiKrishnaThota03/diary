@@ -1,20 +1,23 @@
 {
   "name": "diary",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Personal diary built with Express, EJS and MongoDB",
+  "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "node --test test/"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^1.20.1",
+    "dotenv": "^16.6.1",
     "ejs": "^3.1.8",
     "express": "^4.18.2",
     "method-override": "^3.0.0",
-    "mongoose": "^6.8.4",
-    "nodemon": "^2.0.20",
-    "redis": "^4.6.4"
+    "mongoose": "^6.8.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

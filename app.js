@@ -1,129 +1,143 @@
-const redis = require('redis');
+const path = require('path');
 const express = require('express');
-const bodyparser = require('body-parser');   
 const mongoose = require('mongoose');
 const methodOverride = require('method-override');
-
-const app = express();
-const port = 3000;
-
-app.set('view engine','ejs');
-
-// serving static files
-app.use(express.static('public'))
-
-// body parser middleware
-app.use(bodyparser.urlencoded({extended: false}));
-
-// parse application/json
-app.use(bodyparser.json());
-
-// middleware for method-override
-app.use(methodOverride('_method'));
-
-// database url
-const url = 'mongodb+srv://vamsikrishna:Tvkrishna%401@cluster0.ndjryo4.mongodb.net/Diary?retryWrites=true&w=majority';
-
-// mongoose helps to connect to the database and interact with the database
-// connecting application with the database
-mongoose.set('strictQuery', false);
-mongoose.connect(url,{
-    useNewUrlParser:true,
-    useUnifiedTopology:true
-}).then(console.log("Mongo DB connected"))
-.catch(err=> console.log(err))
-
-// import diary module
+const config = require('./lib/config');
+const { basicAuth, sameOriginWrites } = require('./lib/auth');
 const Diary = require('./models/Diary');
 
-// routing
+function createApp({ username, password }) {
+  const app = express();
 
-// route for /
-app.get('/',(req,res)=>{
-    res.render('Home');        
-});
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(__dirname, 'views'));
+  app.disable('x-powered-by');
 
-// route for about page
-app.get('/about',(req,res)=>{
-    res.render('about');
-})
+  app.use(basicAuth({ username, password }));
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.urlencoded({ extended: false }));
+  app.use(sameOriginWrites);
+  app.use(methodOverride('_method'));
 
-// route for diary
-app.get('/diary',(req,res)=>{
-    Diary.find().then(data=>{    
-        res.render('Diary',{ data:data });
-        // console.log(data);
-    }).catch(err=>{
-        console.log(err);
-    })
-})
+  // Formats a Date for <input type="date"> and for display.
+  app.locals.toInputDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+  app.locals.formatDate = (d) =>
+    d ? new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
 
+  const readEntry = (body) => ({
+    title: (body.title || '').trim(),
+    description: (body.description || '').trim(),
+    date: body.date,
+  });
 
-// route for adding records
-app.get('/add',(req,res)=>{
-    res.render('add');
-})
+  const validate = (entry) => {
+    const errors = [];
+    if (!entry.title) errors.push('Title is required.');
+    if (!entry.description) errors.push('Write something in the entry.');
+    if (!entry.date || Number.isNaN(Date.parse(entry.date))) errors.push('Pick a valid date.');
+    return errors;
+  };
 
+  // Loads the entry for :id or renders a 404.
+  const findEntry = async (req, res, next) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).render('404');
+    try {
+      const entry = await Diary.findById(req.params.id);
+      if (!entry) return res.status(404).render('404');
+      res.locals.entry = entry;
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
 
-// route for saving diaries
-app.post('/add-to-diary',async(req,res)=>{
-    // res.send(req.body.title);
-    const data = new Diary({
-        title:req.body.title,
-        description:req.body.description,
-        date:req.body.date
-    })
-    
-    await data.save().then(()=>{
-        res.redirect('/diary');
-    }).catch(err=>{
-        console.log(err);
-    })
+  app.get('/', (req, res) => res.render('Home', { active: 'home' }));
 
-    
-})
+  app.get('/about', (req, res) => res.render('about', { active: 'about' }));
 
-// route for displaying records
-app.get('/diary/:id',(req,res)=>{
-    Diary.findOne({
-        _id:req.params.id
-    }).then(data=>{
-        res.render('page',{data:data})
-    }).catch(err=>{
-        console.log(err);
-    })
-})
+  app.get('/diary', async (req, res, next) => {
+    try {
+      const data = await Diary.find().sort({ date: -1, _id: -1 });
+      res.render('Diary', { data, active: 'diary' });
+    } catch (err) {
+      next(err);
+    }
+  });
 
+  app.get('/add', (req, res) => res.render('add', { active: 'add', errors: [], entry: { date: new Date() } }));
 
-// route for edit page
-app.get('/diary/edit/:id',(req,res)=>{
-    Diary.findOne({
-        _id:req.params.id
-    }).then(data=>{
-        res.render('edit',{data:data})
-    }).catch(err=>{
-        console.log(err);
-    })
-})
+  app.post('/add-to-diary', async (req, res, next) => {
+    const entry = readEntry(req.body);
+    const errors = validate(entry);
+    if (errors.length) return res.status(400).render('add', { active: 'add', errors, entry });
+    try {
+      const saved = await Diary.create(entry);
+      return res.redirect(`/diary/${saved.id}`);
+    } catch (err) {
+      return next(err);
+    }
+  });
 
+  app.get('/diary/:id', findEntry, (req, res) => res.render('page', { data: res.locals.entry, active: 'diary' }));
 
-// edit data
-app.put('/diary/edit/:id',(req,res)=>{
-    Diary.findOne({
-        _id:req.params.id
-    }).then(data=>{
-        data.title = req.body.title
-        data.description = req.body.description
-        data.date = req.body.date
-        data.save().then(()=>{
-            res.redirect('/diary')
-        }).catch(err=>console.log(err))
-    }).catch(err=>console.log(err))
-})
+  app.get('/diary/edit/:id', findEntry, (req, res) =>
+    res.render('edit', { data: res.locals.entry, errors: [], active: 'diary' })
+  );
 
+  app.put('/diary/edit/:id', findEntry, async (req, res, next) => {
+    const entry = readEntry(req.body);
+    const errors = validate(entry);
+    if (errors.length) {
+      return res.status(400).render('edit', { data: { ...entry, id: req.params.id }, errors, active: 'diary' });
+    }
+    try {
+      Object.assign(res.locals.entry, entry);
+      await res.locals.entry.save();
+      return res.redirect(`/diary/${req.params.id}`);
+    } catch (err) {
+      return next(err);
+    }
+  });
 
+  app.delete('/diary/:id', findEntry, async (req, res, next) => {
+    try {
+      await res.locals.entry.deleteOne();
+      return res.redirect('/diary');
+    } catch (err) {
+      return next(err);
+    }
+  });
 
-// creating a server
-app.listen(port,()=>{
-    console.log(`Listening to port ${port}`);
-});
+  app.use((req, res) => res.status(404).render('404'));
+
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).render('error');
+  });
+
+  return app;
+}
+
+async function main() {
+  const url = config.required('MONGO_URI');
+  const username = config.required('DIARY_USERNAME');
+  const password = config.required('DIARY_PASSWORD');
+
+  mongoose.set('strictQuery', false);
+  await mongoose.connect(url);
+  console.log('MongoDB connected');
+
+  createApp({ username, password }).listen(config.port, config.host, () => {
+    console.log(`Listening on http://${config.host}:${config.port}`);
+  });
+}
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { createApp };

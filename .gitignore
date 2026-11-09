@@ -8,3 +8,4 @@ node_modules/
 # logs / OS
 npm-debug.log*
 .DS_Store
+!.env.example
