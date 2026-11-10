@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+      - name: Test
+        run: npm test
+
+      - name: Coverage
+        if: matrix.node == '20'
+        run: npm run test:coverage
+
+  integration:
+    name: integration against real MongoDB
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      MONGO_URI: mongodb://127.0.0.1:27017/diary_test
+      DIARY_USERNAME: ci-user
+      DIARY_PASSWORD: ci-only-password-not-used-anywhere
+      PORT: '3000'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+
+      - name: Probes, auth gate, bind address, full entry lifecycle
+        run: |
+          set -euo pipefail
+          node app.js > server.log 2>&1 & SERVER_PID=$!
+
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/healthz > /dev/null && break
+            sleep 1
+          done
+
+          echo "--- listening sockets on 3000 ---"
+          ss -ltn 2>/dev/null | grep ':3000' || true
+
+          # lib/config.js defaults HOST to 127.0.0.1; prove it on the socket.
+          if ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*):3000'; then
+            echo "::error::server is listening on all interfaces by default"
+            exit 1
+          fi
+          ss -ltn 2>/dev/null | grep -q '127.0.0.1:3000' \
+            || { echo "::error::no loopback listener found"; ss -ltn; exit 1; }
+
+          # The probes must work with no credentials.
+          curl -fsS http://127.0.0.1:3000/healthz | grep -q '"ok":true'
+          curl -fsS http://127.0.0.1:3000/healthz/ready \
+            | tee /dev/stderr | grep -q '"database":"connected"'
+
+          # Everything else must be gated.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/diary)
+          test "$code" = "401" || { echo "::error::/diary returned $code without credentials"; exit 1; }
+
+          AUTH="-u ci-user:ci-only-password-not-used-anywhere"
+
+          # Create an entry, follow the redirect, and confirm it renders.
+          location=$(curl -s $AUTH -o /dev/null -w '%{redirect_url}' \
+            -X POST http://127.0.0.1:3000/add-to-diary \
+            --data-urlencode 'title=CI entry' \
+            --data-urlencode 'description=Written by continuous integration.' \
+            --data-urlencode 'date=2026-01-15' \
+            -H "Origin: http://127.0.0.1:3000")
+          echo "redirected to: $location"
+          test -n "$location" || { echo "::error::no redirect after create"; cat server.log; exit 1; }
+
+          curl -fsS $AUTH "$location" | grep -q 'CI entry' \
+            || { echo "::error::created entry did not render"; exit 1; }
+
+          curl -fsS $AUTH http://127.0.0.1:3000/diary | grep -q 'CI entry' \
+            || { echo "::error::entry missing from the list"; exit 1; }
+
+          # A cross-site write must be refused even with valid credentials,
+          # because the browser would attach them automatically.
+          code=$(curl -s $AUTH -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:3000/add-to-diary \
+            --data-urlencode 'title=CSRF' \
+            --data-urlencode 'description=should not be saved' \
+            --data-urlencode 'date=2026-01-16' \
+            -H 'Origin: https://evil.example')
+          test "$code" = "403" || { echo "::error::cross-site write returned $code, expected 403"; exit 1; }
+
+          if curl -fsS $AUTH http://127.0.0.1:3000/diary | grep -q 'CSRF'; then
+            echo "::error::the cross-site entry was saved"
+            exit 1
+          fi
+          echo "lifecycle and CSRF checks OK"
+
+          kill -TERM $SERVER_PID
+          for i in $(seq 1 15); do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then echo "exited cleanly"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::server did not shut down on SIGTERM"
+          exit 1
+
+      - name: HOST=0.0.0.0 is still honoured for container hosting
+        env:
+          PORT: '3002'
+          HOST: 0.0.0.0
+        run: |
+          set -euo pipefail
+          node app.js > server2.log 2>&1 & SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3002/healthz > /dev/null && break
+            sleep 1
+          done
+          ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*):3002' \
+            || { echo "::error::HOST override was ignored"; ss -ltn; exit 1; }
+          echo "HOST override works"
+
+  docker:
+    name: image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: diary:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image refuses to start without its credentials
+        run: |
+          set +e
+          output=$(docker run --rm -e MONGO_URI=mongodb://127.0.0.1:27017/x diary:ci 2>&1)
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0 || { echo "::error::started with no diary credentials"; exit 1; }
+          echo "$output" | grep -qE "DIARY_USERNAME|DIARY_PASSWORD" \
+            || { echo "::error::expected a missing-credential error"; exit 1; }
