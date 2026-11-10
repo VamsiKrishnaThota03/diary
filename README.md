@@ -6,8 +6,8 @@ A server-rendered personal diary built with Express, EJS and MongoDB. You can wr
 ![EJS](https://img.shields.io/badge/views-EJS-B4CA65)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
 
-[![CI](https://github.com/VamsiKrishnaThota03/diary/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/diary/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/VamsiKrishnaThota03/diary/actions/workflows/codeql.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/diary/actions/workflows/codeql.yml)
+[![CI](https://github.com/VamsiKrishnaThota03/express-diary/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/express-diary/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/VamsiKrishnaThota03/express-diary/actions/workflows/codeql.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/express-diary/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Entries](docs/screenshots/entries.png)
@@ -62,7 +62,7 @@ diary/
 ### Install and run
 
 ```bash
-git clone https://github.com/VamsiKrishnaThota03/diary.git
+git clone https://github.com/VamsiKrishnaThota03/express-diary.git
 cd diary
 npm install
 cp .env.example .env   # then set MONGO_URI, DIARY_USERNAME and DIARY_PASSWORD
